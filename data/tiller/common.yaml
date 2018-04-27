@@ -1,0 +1,16 @@
+---
+data_sources:
+  - file
+  - environment_json
+  - environment
+template_sources:
+  - file
+
+default_environment: default
+
+environments:
+  default:
+    pound.erb:
+      target: /etc/pound/pound.cfg
+
+exec: ["/pound/start.sh"]

@@ -1,0 +1,93 @@
+User    "www-data"
+Group   "www-data"
+
+## Logging: (goes to syslog by default)
+##      0       no logging
+##      1       normal
+##      2       extended
+##      3       Apache-style (common log format)
+LogLevel 2
+LogFacility -
+
+## run in foreground
+Daemon 0
+
+## check backend every X secs:
+Alive 30
+
+## Ignore case when used in URLs
+IgnoreCase 1
+
+
+## Redirect all HTTP traffic to HTTPS
+ListenHTTP
+  Address 0.0.0.0
+  Port 80
+
+  ## Remove the "X-Forwarded-For" header if it is there.
+  ## Prevents multiple comma separated ip address to show up in the logs.
+  HeadRemove "X-Forwarded-For"
+
+<% hosts.each do | host | -%>
+  Service
+    HeadRequire "Host: <%= host['subdomain'] %>.<%= env_domain %>"
+    Redirect "https://<%= host['subdomain'] %>.<%= env_domain %>"
+  End
+
+<% end -%>
+End
+
+ListenHTTPS
+  Address 0.0.0.0
+  Port 443
+
+  HeadRemove "X-Forwarded-For"
+
+  ## Defines which HTTP verbs are accepted.
+  ## Value = 2 to allow default HTTP + standard WebDAV verbs
+  ## Refer to Pound manual for more
+  xHTTP 4
+
+# Following certs must contain the full CA Chain in the following order:
+# < site private key >
+# < public cert >
+# < issuers cert >
+# < root ca cert >
+  Cert "/etc/pound/certs/<%= env_domain %>.pem"
+
+  ## Enforce Cipher order
+  SSLHonorCipherOrder 1
+
+  ## Do not allow client SSL renegotiation
+  SSLAllowClientRenegotiation 0
+
+  ## Define TLS Ciphers.
+  ## This will give you 90/100 score at SSLLabs. Disallow 128bit AES for a
+  ## perfect score.
+  Ciphers "+CAMELLIA256:+AES256:EECDH+aRSA+SHA384:EECDH+aRSA+SHA256:EECDH:EDH+CAMELLIA:EDH+aRSA:EECDH+aRSA+AESGCM:!aNULL:!eNULL:!EXPORT:!DES:!3DES:!MD5:!RC4!SSLv2:!SSLv3"
+
+  ## Disable SSL (All versions)
+  Disable SSLv2
+  Disable SSLv3
+
+<% hosts.each do | host | -%>
+<% if host['path'] -%>
+  Service
+    HeadRequire "Host: <%= host['subdomain'] %>.<%= env_domain %>"
+    URL "^/$"
+    Redirect "https://<%= host['subdomain'] %>.<%= env_domain %>/<%= host['path'] %>"
+  End
+<% end -%>
+  Service
+    HeadRequire "Host: <%= host['subdomain'] %>.<%= env_domain %>"
+
+    BackEnd
+      Address <%= host['internal_dns'] || host['subdomain'] %>
+      Port <%= host['port'] || '80' %>
+    End
+  End
+
+<% end -%>
+
+End
+
